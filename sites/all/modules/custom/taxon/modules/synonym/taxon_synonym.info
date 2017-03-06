@@ -1,0 +1,6 @@
+name = Taxon Synonym
+description = Displays synonym names on taxon pages.
+dependencies[] = taxon
+core = 7.x
+package = Nordic Microalgae
+files[] = taxon_synonym.module

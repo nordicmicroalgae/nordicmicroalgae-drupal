@@ -1,0 +1,238 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Enables facts to be displayed on taxon pages. Allows users to update internal facts.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function taxon_facts_menu() {
+  $items['taxon/%taxon/facts/edit'] = array(
+    'title' => 'Edit facts',
+    'page callback' => 'taxon_facts_page_edit',
+    'page arguments' => array(1),
+    'access arguments' => array('update taxon facts'),
+    'weight' => 0,
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_PAGE,
+    'file' => 'taxon_facts.pages.inc',
+  );
+  
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function taxon_facts_permission() {
+  return array(
+    'update taxon facts' => array(
+      'title' => t('Update taxon facts'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function taxon_facts_theme() {
+  return array(
+    'taxon_facts' => array(
+      'template' => 'taxon-facts',
+      'variables' => array('rank' => NULL, 'facts' => NULL, 'external_facts' => NULL),
+    ),
+    'taxon_facts_peg' => array(
+      'template' => 'taxon-facts-peg',
+      'variables' => array('facts_peg' => NULL),
+    )
+  );
+}
+
+/**
+ * Implements hook_taxon_view().
+ */
+function taxon_facts_taxon_view($taxon) {
+  if ($taxon->facts || $taxon->external_facts) {
+    $taxon->content['facts'] = array(
+      '#theme' => 'taxon_facts',
+      '#rank' => $taxon->rank,
+      '#facts' => $taxon->facts,
+      '#external_facts' => $taxon->external_facts,
+      '#weight' => 30,
+    );
+  }
+  if ($taxon->facts_peg) {
+    $taxon->content['facts_peg'] = array(
+      '#theme' => 'taxon_facts_peg',
+      '#facts_peg' => $taxon->facts_peg,
+      '#weight' => 45,
+    );
+  }
+}
+
+/**
+ * Process variables for taxon-facts.tpl.php
+ * 
+ * The $variables array contains the following arguments:
+ * - $facts
+ * 
+ * @see taxon-facts.tpl.php
+ */
+function template_preprocess_taxon_facts(&$variables) {
+  $facts = array();
+  
+  // Show different fields depending on rank.
+  switch ($variables['rank']) {
+    case 'Species pair': 
+    case 'Species': 
+    case 'Subspecies': 
+    case 'Variety': 
+    case 'Form': 
+    case 'Hybrid':
+      $settings = taxon_get_settings('Species view');
+      break;
+    
+    default:
+      $settings = taxon_get_settings('Taxon view');
+      break;
+  }
+  
+  $fields = $settings['Field list'];
+  foreach ($fields as $field) {
+    $parts = explode('.', $field);
+    
+    $type = $parts[0];
+    $field = $value = null;
+    
+    if ($type == 'Facts') {
+      $field = $parts[1];
+      if (isset($variables['facts'][$field])) {
+        $value = $variables['facts'][$field];
+      }
+    }
+    elseif ($type == 'External Facts') {
+      $provider = $parts[1];
+      $field = $parts[2];
+      if (isset($variables['external_facts'][$provider][$field])) {
+        $value = $variables['external_facts'][$provider][$field];
+      }
+    }
+    
+    // Handle multiple-values/lists.
+    if (is_array($value) && !empty($value)) {
+      $facts[] = array(
+        'field' => check_plain($field),
+        'value' => check_plain(implode(', ', $value)),
+      );
+    }
+    // Handle single-values.
+    elseif (is_string($value) && $value !== '') {
+      $facts[] = array(
+        'field' => check_plain($field),
+        'value' => filter_xss($value, array('br', 'a', 'em', 'strong', 'cite', 'blockquote', 'code', 'ul', 'ol', 'li', 'dl', 'dt', 'dd')),
+      );
+    }
+
+  }
+   
+  $variables['facts'] = $facts;
+}
+
+/**
+ * Process variables for taxon-facts-peg.tpl.php
+ * 
+ * The $variables array contains the following arguments:
+ * - $facts_peg
+ * 
+ * @see taxon-facts-peg.tpl.php
+ */
+function template_preprocess_taxon_facts_peg(&$variables) {
+  $settings = taxon_get_settings('HELCOM PEG');
+  
+  $variables['source'] = $settings['Source of data'];
+  
+  $species = array();
+  foreach ($settings['Species fields'] as $field) {
+    if (!empty($variables['facts_peg'][$field])) {
+      $species[$field] = check_plain($variables['facts_peg'][$field]);
+    }
+  }
+  
+  // Replace Geometric shape with an image, if available.
+  $geometric_shape = $variables['facts_peg']['Geometric shape'];
+  if (!empty($settings['Geometric shape images'][$geometric_shape])) {
+    $image_name = $settings['Geometric shape images'][$geometric_shape];
+    $image_path = drupal_get_path('module', 'taxon_facts') . '/geometric-shapes/' . $image_name;
+    
+    $species['Geometric shape'] = theme('image', array('path' => $image_path, 'alt' => $geometric_shape));
+  }
+    
+  $variables['species'] = $species;
+
+  
+  // Create an array with fields as keys and arrays containing values for each size class as values.
+  $size_classes = array();
+  foreach ($settings['Size class fields'] as $field) {    
+
+    foreach ($variables['facts_peg']['Size classes'] as $key => $size_class) {
+      if (isset($size_class[$field])) {
+        if (!isset($size_classes[$field])) {
+          // Create an array containing empty default values for this field in case it does not exist in other size classes.
+          $size_classes[$field] = array_fill_keys(array_keys($variables['facts_peg']['Size classes']), '');
+        }
+        $size_classes[$field][$key] = check_plain($size_class[$field]);
+      }
+    }
+
+  }
+  $variables['size_classes'] = $size_classes;
+}
+
+/**
+ * Save taxon facts.
+ * 
+ * @param $taxon_id
+ *   The internal taxon id to update facts for.
+ * @param $edit
+ *   An associative array of fields and values to save.
+ *   For example array('Life form' => 'Solitary'). Existing data
+ *   will be merged with the $edit array before saving.
+ * 
+ */
+function taxon_facts_save($taxon_id, $edit) {
+  
+  // Load unchanged facts from the database.
+  $facts = taxon_db_query('SELECT facts_json FROM taxa_facts WHERE taxon_id = :taxon_id', array(':taxon_id' => $taxon_id))->fetchField();
+  
+  // Abort if the record does not exists in the database.
+  if ($facts === FALSE) {
+    return FALSE;
+  }
+  
+  // Decode JSON into an associative array.
+  $facts = json_decode($facts, true);
+  
+  // Merge existing $facts with $edit.
+  $edit = array_merge($facts, $edit);
+  
+  // Set Last modified to a datetime string using the defined timezone.
+  $edit['Last modified'] = format_date(time(), 'custom', 'Y-m-d H:i:s');
+  
+  // Write to the database.     
+  $result = taxon_db_update('taxa_facts')
+    ->fields(array('facts_json' => json_encode($edit)))
+    ->condition('taxon_id', $taxon_id)
+    ->execute();
+  
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  
+  // Allow other modules to update their data.
+  module_invoke_all('taxon_facts_update', $edit, $facts, $taxon_id);
+    
+  return TRUE;
+}

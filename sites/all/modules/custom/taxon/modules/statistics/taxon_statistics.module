@@ -1,0 +1,57 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Provides a block with taxa and media statistics.
+ */
+
+/**
+ * Implements hook_block_info().
+ */
+function taxon_statistics_block_info() {
+  $blocks = array();
+  
+  $blocks['statistics'] = array(
+    'info' => t('Listing of taxa and media statistics.'),
+    'cache' => DRUPAL_NO_CACHE, // todo: better cache option.
+  );
+  
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function taxon_statistics_block_view($delta) {
+  $block = array();
+  
+  switch ($delta) {
+    case 'statistics':
+      $statistics = array();
+
+      $statistics[] = t('<strong>Number of species:</strong> @count', 
+        array('@count' => taxon_db_query("SELECT COUNT(*) FROM {taxa} WHERE rank = 'Species'")->fetchColumn()));
+
+      $statistics[] = t('<strong>Number of taxa:</strong> @count', 
+        array('@count' => taxon_db_query("SELECT COUNT(*) FROM {taxa}")->fetchColumn()));
+
+      $statistics[] = t('<strong>Number of images:</strong> @count', 
+        array('@count' => taxon_db_query("SELECT COUNT(*) FROM {taxa_media} WHERE media_type = 'image'")->fetchColumn()));
+      
+      $statistics[] = t('<strong>Number of videos:</strong> @count', 
+        array('@count' => taxon_db_query("SELECT COUNT(*) FROM {taxa_media} WHERE media_type = 'video'")->fetchColumn()));
+
+      $statistics[] = t('<strong>Number of contributors:</strong> @count',
+        array('@count' => db_query("SELECT COUNT(*) FROM {users} WHERE uid > 1 AND status = 1")->fetchColumn())); // Note: Exclude anon and admin uid.
+
+      $block['subject'] = t('Statistics');
+      $block['content'] = array(
+        '#theme' => 'item_list',
+        '#items' => $statistics,
+      );
+      break;
+  }
+  
+  return $block;
+}

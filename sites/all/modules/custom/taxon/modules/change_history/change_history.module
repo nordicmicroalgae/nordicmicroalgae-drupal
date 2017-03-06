@@ -1,0 +1,162 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Saves changes such as when a user updates taxon facts, adding taxon media etc.
+ */
+ 
+/**
+ * Implements hook_taxon_facts_update().
+ */
+function change_history_taxon_facts_update($update, $original, $taxon_id) {    
+    $change = new stdClass;
+    $change->taxon_id = $taxon_id;
+    $change->description = t('Updated facts');
+    change_history_save($change);
+}
+
+/**
+ * Implements hook_taxon_media_insert().
+ */
+function change_history_taxon_media_insert($media) {
+  $change = new stdClass;
+  $change->taxon_id = $media->taxon_id;
+  $change->description = t('Added media: @media_id', array('@media_id' => $media->media_id));
+  change_history_save($change);
+}
+
+/**
+ * Implements hook_taxon_media_metadata_update().
+ */
+function change_history_taxon_media_metadata_update($update, $original, $media_id) {
+  $media = taxon_media_load($media_id);
+  
+  $change = new stdClass;
+  $change->taxon_id = $media->taxon_id;
+  $change->description = t('Updated media metadata for @media_id', array('@media_id' => $media_id));
+  change_history_save($change);
+}
+
+/**
+ * Implements hook_taxon_media_delete().
+ */
+function change_history_taxon_media_delete($media) {
+  $change = new stdClass;
+  $change->taxon_id = $media->taxon_id;
+  $change->description = t('Deleted media: @media_id', array('@media_id' => $media->media_id));
+  change_history_save($change);
+}
+
+/**
+ * Implements hook_theme().
+ */
+function change_history_theme() {
+  return array(
+    'change_history' => array(
+      'template' => 'change-history',
+      'variables' => array('change_history' => NULL),
+    ),
+  );
+}
+
+/**
+ * Implements hook_taxon_view().
+ */
+function change_history_taxon_view($taxon) {
+  $taxon_id = taxon_name_to_id($taxon->name);
+  $change_history = change_history_get_by_taxon_id($taxon_id);
+  if (!empty($change_history)) {
+    $taxon->content['change_history'] = array(
+      '#theme' => 'change_history',
+      '#change_history' => $change_history,
+      '#weight' => 50,
+    );
+  }
+}
+
+/**
+ * Implements hook_user_update().
+ */
+function change_history_user_update(&$edit, $account, $category) {
+  // Update user_name in change_history if users changes their username.
+  if ($account->name != $account->original->name) {
+    taxon_db_update('change_history')
+      ->fields(array('user_name' => $account->name))
+      ->condition('user_name', $account->original->name)
+      ->execute();
+  }
+}
+
+/**
+ * Find change history by taxon id.
+ * 
+ * @param $taxon_id
+ *   Integer specifying taxon id to load change history for.
+ * 
+ * @return
+ *   An array of change history objects or an empty array if there are no
+ *   change history for the specified taxon id.
+ */
+function change_history_get_by_taxon_id($taxon_id) {
+  $change_history = taxon_db_select('change_history', 'c')
+    ->fields('c', array('current_taxon_name', 'user_name', 'description', 'timestamp'))
+    ->condition('taxon_id', $taxon_id)
+    ->orderBy('timestamp', 'DESC')
+    ->execute()
+    ->fetchAll();
+  
+  return $change_history;
+}
+
+/**
+ * Saves a change to the change history.
+ * 
+ * @param $change
+ *   A change history object.
+ */
+function change_history_save($change) {
+  global $user;
+  
+  if (empty($change->timestamp)) {
+    $change->timestamp = format_date(REQUEST_TIME, 'custom', 'Y-m-d H:i:s');
+  }
+  
+  if (empty($change->user_name)) {
+    $change->user_name = $user->name;
+  }
+  
+  if (empty($change->current_taxon_name)) {
+    $change->current_taxon_name = taxon_id_to_name($change->taxon_id);
+  }
+  
+  taxon_db_insert('change_history')
+    ->fields(array(
+      'taxon_id' => $change->taxon_id,
+      'current_taxon_name' => $change->current_taxon_name,
+      'user_name' => $change->user_name,
+      'description' => $change->description,
+      'timestamp' => $change->timestamp,
+    ))
+    ->execute();
+}
+
+/**
+ * Process variables for change history.
+ * 
+ * The $variables array contains the following arguments:
+ * - $change_history
+ * 
+ * @see change-history.tpl.php
+ */
+function template_preprocess_change_history(&$variables) {
+  $change_history = array();
+  foreach ($variables['change_history'] as $change) {
+    $change_history[] = array(
+      'timestamp' => check_plain($change->timestamp),
+      'user_name' => check_plain($change->user_name),
+      'description' => check_plain($change->description),
+    );
+  }
+  $variables['change_history'] = $change_history;
+}

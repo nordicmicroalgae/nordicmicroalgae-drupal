@@ -1,0 +1,6 @@
+name = Change History
+description = Saves changes such as when a user updates taxon facts, adding taxon media etc. Changes are being shown at taxon pages.
+dependencies[] = taxon
+core = 7.x
+package = Nordic Microalgae
+files[] = change_history.module

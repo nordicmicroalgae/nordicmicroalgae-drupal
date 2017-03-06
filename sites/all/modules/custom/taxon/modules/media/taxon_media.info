@@ -1,0 +1,7 @@
+name = Taxon Media
+description = Displays media on taxon pages. Allows users to upload and manage media.
+dependencies[] = taxon
+core = 7.x
+package = Nordic Microalgae
+files[] = taxon_media.module
+stylesheets[all][] = taxon_media.css

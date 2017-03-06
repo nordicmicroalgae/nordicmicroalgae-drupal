@@ -1,0 +1,35 @@
+#taxon-external-links ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#taxon-external-links ul li {
+  float: left;
+  margin: 0 10px 0;
+}
+
+#taxon-external-links ul li a {
+  display: block;
+  width: 80px;
+  padding: 32px 0 0;
+  background-repeat: no-repeat;
+  background-position: top center;
+  text-align: center;
+}
+
+.taxon-external-link-algaebase a {
+  background-image: url(images/algaebase.gif);
+}
+
+.taxon-external-link-ioc a {
+  background-image: url(images/ioc-hab.gif);
+}
+
+.taxon-external-link-sccap a {
+  background-image: url(images/sccap.gif);
+}
+
+.taxon-external-link-dyntaxa a {
+  background-image: url(images/slu.gif);
+}

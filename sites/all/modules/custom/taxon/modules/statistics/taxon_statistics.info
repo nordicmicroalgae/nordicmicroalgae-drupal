@@ -1,0 +1,6 @@
+name = Taxon Statistics
+description = Provides a block with taxa and media statistics.
+dependencies[] = taxon
+core = 7.x
+package = Nordic Microalgae
+files[] = taxon_statistics.module

@@ -1,0 +1,7 @@
+name = Taxon
+description = Enables a basic taxon page and allows modules to integrate with Nordic Microalgae database and WebService API.
+package = Nordic Microalgae
+core = 7.x
+files[] = taxon.module
+files[] = lib/NordicMicroalgaeClient.php
+scripts[] = taxon.js

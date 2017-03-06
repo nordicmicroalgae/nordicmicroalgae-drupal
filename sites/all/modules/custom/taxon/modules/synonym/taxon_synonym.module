@@ -1,0 +1,48 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Displays synonym names on taxon pages.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function taxon_synonym_theme() {
+  return array(
+    'taxon_synonyms' => array(
+      'template' => 'taxon-synonyms',
+      'variables' => array('synonyms' => NULL),
+    ),
+  );
+}
+
+/**
+ * Implements hook_taxon_view().
+ */
+function taxon_synonym_taxon_view($taxon) {
+  if (!empty($taxon->synonyms)) {
+    $taxon->content['synonyms'] = array(
+      '#theme' => 'taxon_synonyms',
+      '#synonyms' => $taxon->synonyms,
+      '#weight' => 25,
+    );
+  }
+}
+
+/**
+ * Process variables for taxon synonyms.
+ * 
+ * The $variables array contains the following arguments:
+ * - $synonyms
+ * 
+ * @see taxon-synonyms.tpl.php
+ */
+function template_preprocess_taxon_synonyms(&$variables) {
+  // Sanitize data.
+  foreach ($variables['synonyms'] as $key => $synonym) {
+    $variables['synonyms'][$key]['synonym_name'] = check_plain($synonym['synonym_name']);
+    $variables['synonyms'][$key]['synonym_author'] = check_plain($synonym['synonym_author']);
+  }
+}

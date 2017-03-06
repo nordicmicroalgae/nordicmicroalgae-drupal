@@ -1,0 +1,8 @@
+name = Taxon Navigation
+description = Enables components for navigating, searching and filtering taxa
+dependencies[] = taxon
+core = 7.x
+package = Nordic Microalgae
+files[] = taxon_navigation.module
+stylesheets[all][] = taxon_navigation.css
+scripts[] = taxon_navigation.js

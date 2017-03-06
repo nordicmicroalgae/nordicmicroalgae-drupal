@@ -1,0 +1,7 @@
+name = Taxon Facts
+description = Displays facts from different sources on taxon pages. Allows users to update internal facts.
+dependencies[] = taxon
+core = 7.x
+package = Nordic Microalgae
+files[] = taxon_facts.module
+stylesheets[all][] = taxon_facts.css

@@ -1,0 +1,408 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Enables components for navigating, searching and filtering taxa.
+ * 
+ * This module provides blocks and JavaScript components
+ * for navigating, searching and filtering taxa.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function taxon_navigation_menu() {
+  $items['taxonomic-view'] = array(
+    'title' => 'Taxonomic view',
+    'page callback' => 'taxon_navigation_page_taxonomic_view',
+    'access callback' => TRUE,
+  );
+  $items['quick-view'] = array(
+    'title' => 'Quick view',
+    'page callback' => 'taxon_navigation_page_quick_view',
+    'access callback' => TRUE,
+  );
+  
+  return $items;
+}
+
+/**
+ * Implements hook_block_info().
+ * @todo Cache options for block(s).
+ */
+function taxon_navigation_block_info() {
+  $blocks = array();
+  
+  $blocks['classification'] = array(
+    'info' => t('Classification'),
+  );
+  
+  $blocks['navigation'] = array(
+    'info' => t('Taxon navigation'),
+  );
+  
+  $blocks['alphabetical'] = array(
+    'info' => t('Alphabetical tree'),
+  );
+  
+  $blocks['groups'] = array(
+    'info' => t('Taxon groups'),
+  );
+  
+  $blocks['filters'] = array(
+    'info' => t('Taxon filters'),
+  );
+  
+  $blocks['search'] = array(
+    'info' => t('Taxon search'),
+  );
+  
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function taxon_navigation_block_view($delta = '') {
+  $block = array();
+  
+  switch ($delta) {
+    case 'navigation':
+      
+      if ($taxon = menu_get_object('taxon')) {
+        // Display the full navigation block if the user is browsing a taxon.
+        $content = array(
+          '#theme' => 'taxon_navigation_block',
+          '#navigation' => $taxon->navigation,
+        );
+      }
+      else {
+        // Display a tree with the top nodes.
+        $content = array(
+          '#theme' => 'taxon_tree',
+          '#taxa' => taxon_get_top_nodes(),
+        );
+      }
+    
+      $block['subject'] = t('Taxonomy');
+      $block['content'] = $content;
+      break;
+    
+    case 'classification':
+      if ($taxon = menu_get_object('taxon')) {
+        $block['subject'] = t('Classification');
+        $block['content'] = array(
+          '#theme' => 'taxon_classification',
+          '#classification' => $taxon->navigation['classification'],
+        );
+      }
+      break;
+    
+    case 'alphabetical':
+      $block['subject'] = t('Browse alphabetical');
+      $block['content']['alphabetical']['#markup'] = '<div id="taxon-alphabet"></div>';
+      $block['content']['#attached']['js'][] = drupal_get_path('module', 'taxon_navigation') . '/js/jquery.taxonalphabet.js';
+      $block['content']['#attached']['js'][] = drupal_get_path('module', 'taxon_navigation') . '/js/browser.js';
+      break;
+    
+    case 'groups':
+      drupal_add_js(array('taxon' => array('groups' => taxon_get_settings('Filter groups'))), 'setting');
+      $block['subject'] = t('Groups of organisms');
+      $block['content']['groups']['#markup'] = '<div id="taxon-groups"></div>';
+      $block['content']['#attached']['js'][] = drupal_get_path('module', 'taxon_navigation') . '/js/jquery.taxongroups.js';
+      $block['content']['#attached']['js'][] = drupal_get_path('module', 'taxon_navigation') . '/js/browser.js';
+      break;
+      
+    case 'filters':
+      drupal_add_js(array('taxon' => array('filters' => taxon_get_settings('Filters'))), 'setting');
+      $block['subject'] = t('Filter');
+      $block['content']['filters']['#markup'] = '<div id="taxon-filters"></div>';
+      $block['content']['#attached']['js'][] = drupal_get_path('module', 'taxon_navigation') . '/js/jquery.taxonfilters.js';
+      $block['content']['#attached']['js'][] = drupal_get_path('module', 'taxon_navigation') . '/js/browser.js';
+      break;
+    
+    case 'search':
+      drupal_add_library('system', 'ui.autocomplete');
+      $block['subject'] = t('Search');
+      $block['content']['search']['#markup'] = '<div id="taxon-search"></div>';
+      $block['content']['#attached']['js'][] = drupal_get_path('module', 'taxon_navigation') . '/js/search.js';
+      break;
+  }
+  
+  return $block;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function taxon_navigation_theme() {
+  return array(
+    'taxon_list' => array(
+      'template' => 'taxon-list',
+      'variables' => array('taxa' => NULL),
+    ),
+    'taxon_children' => array(
+      'template' => 'taxon-children',
+      'variables' => array('children' => NULL),
+    ),
+    'taxon_navigation_block' => array(
+      'template' => 'taxon-navigation-block',
+      'variables' => array('navigation' => NULL),
+    ),
+    'taxon_tree' => array(
+      'variables' => array('taxa' => NULL, 'parent_name' => NULL, 'child_tree' => NULL),
+    ),
+    'taxon_classification' => array(
+      'template' => 'taxon-classification',
+      'variables' => array('classification' => array()),
+    ),
+  );
+}
+
+/**
+ * Implements hook_taxon_view().
+ */
+function taxon_navigation_taxon_view($taxon) {
+  // Add subordinate taxa to the taxon page content, if available.
+  if ($taxon->navigation['children']) {
+    $taxon->content['children'] = array(
+      '#theme' => 'taxon_children',
+      '#children' => $taxon->navigation['children'],
+      '#weight' => 40,
+    );    
+  }
+}
+
+/**
+ * Process variables for taxon-classification.tpl.php
+ * 
+ * The $variables array contains the following arguments:
+ * - $classification
+ * 
+ * @see taxon-classification.tpl.php
+ */
+function template_preprocess_taxon_classification(&$variables) {
+  $classification = array();
+  
+  $taxa = _taxon_navigation_parse_taxa($variables['classification']);
+  foreach ($taxa as $taxon) {
+    $rank = check_plain($taxon['rank']);
+    $name = check_plain($taxon['name']);
+    
+    $classification[$rank] = array(
+      '#type' => 'link',
+      '#title' => $name,
+      '#href' => taxon_path($name),
+    );
+  }
+  
+  $variables['classification'] = $classification;
+}
+
+/**
+ * Process variables for taxa listing.
+ * 
+ * The $variables array contains the following arguments:
+ * - $taxa
+ * 
+ * @see taxon-list.tpl.php
+ */
+function template_preprocess_taxon_list(&$variables) {
+  // Sanitize data and create link and image.
+  foreach ($variables['taxa'] as $key => $taxon) {
+    $variables['taxa'][$key]['link'] = url(taxon_path($taxon['name']));
+    $variables['taxa'][$key]['name'] = check_plain($taxon['name']);
+    $variables['taxa'][$key]['image'] = theme('image', array(
+      'path' => 'http://media.nordicmicroalgae.org/small/' . $taxon['name'] . '.jpg',
+    ));
+  }  
+}
+
+/**
+ * Process variables for taxon-children.tpl.php
+ * 
+ * The $variables array contains the following arguments:
+ * - $children
+ * 
+ * @see taxon-children.tpl.php
+ */
+function template_preprocess_taxon_children(&$variables) {
+  // Create a list of taxa from the children.
+  $taxa = _taxon_navigation_parse_taxa($variables['children']);
+  $variables['children'] = theme('taxon_list', array('taxa' => $taxa));
+}
+
+/**
+ * Process variables for taxon-navigation-block.tpl.php
+ * 
+ * The $variables array contains the following arguments:
+ * - $navigation
+ * 
+ * @see taxon-navigation-block.tpl.php
+ */
+function template_preprocess_taxon_navigation_block(&$variables) {
+  $navigation = $variables['navigation'];
+  
+  // Initialize template variables.
+  $variables['prev_url'] = '';
+  $variables['prev_name'] = '';
+  $variables['next_url'] = '';
+  $variables['next_name'] = '';
+  $variables['tree'] = '';
+  
+  // Create URLs to previous and next taxon in the hierarchy.
+  if ($navigation['prev_in_rank']) {
+    $prev_href = url(taxon_path($navigation['prev_in_rank']));
+    drupal_add_html_head_link(array('rel' => 'prev', 'href' => $prev_href));
+    $variables['prev_url'] = $prev_href;
+    $variables['prev_name'] = check_plain($navigation['prev_in_rank']);
+  }
+  
+  if ($navigation['next_in_rank']) {
+    $next_href = url(taxon_path($navigation['next_in_rank']));
+    drupal_add_html_head_link(array('rel' => 'next', 'href' => $next_href));
+    $variables['next_url'] = $next_href;
+    $variables['next_name'] = check_plain($navigation['next_in_rank']);
+  }
+  
+  
+  // Extract the active trail for current taxon.
+  $path = _taxon_navigation_parse_taxa($navigation['classification']);
+  
+  // Extract and build a tree of subordinate taxa.
+  $children = _taxon_navigation_parse_taxa($navigation['children']);
+  $tree = theme('taxon_tree', array('taxa' => $children));
+  
+  // Extract current taxon and it's siblings.
+  $current = array_pop($path);
+  $current['children_count'] = count($children);
+  $siblings = _taxon_navigation_parse_taxa($navigation['siblings']);
+  
+  // Merge current taxon with the siblings and sort them.
+  $taxa = array_merge(array($current), $siblings);
+  usort($taxa, '_taxon_navigation_sort_taxa');
+  
+  // Build a tree for the current level of taxa, appending the previously built child tree.
+  $tree = theme('taxon_tree', array('taxa' => $taxa, 'parent_name' => $current['name'], 'child_tree' => $tree));
+  
+  // Handle parents, if any.
+  if (count($path) > 0) {
+    $root = array_shift($path);
+    
+    // Loop through remaining parents in reverse order and build a tree for each level.
+    foreach (array_reverse($path) as $parent) {
+      $tree = theme('taxon_tree', array('taxa' => array($parent), 'parent_name' => $parent['name'], 'child_tree' => $tree));
+    }
+    
+    // Add top nodes to the tree.
+    $tree = theme('taxon_tree', array('taxa' => taxon_get_top_nodes(), 'parent_name' => $root['name'], 'child_tree' => $tree));
+  }
+  
+  $variables['tree'] = $tree;
+}
+
+/**
+ * Parses a string of taxon names into an array with sub-arrays 
+ * containing name and children_count or rank (if available).
+ * 
+ * @param $content
+ *   A string containing the names to parse as used in the taxa_navigation table. 
+ *   For example 'Dinophysis:16;Phalacroma:1;Sinophysis:1'
+ * @return
+ *   An array with sub-arrays. 
+ *   Each sub-array contains the following keys:
+ *   - "name": The taxon name.
+ *   Each sub-array may also contain one of the following keys:
+ *   - "children_count": The number of children associated with the taxon.
+ *   - "rank": The rank of the taxon. For example "Kingdom".
+ */
+function _taxon_navigation_parse_taxa($content) {
+  $items = array();
+  
+  if (!empty($content)) {
+    foreach (explode(';', $content) as $item) {
+      $parts = explode(':', $item);
+      
+      if (isset($parts[1])) {
+        if (is_numeric($parts[1])) {
+          $items[] = array('name' => $parts[0], 'children_count' => $parts[1]);
+        } else {
+          $items[] = array('name' => $parts[0], 'rank' => $parts[1]);
+        }
+      } else {
+        $items[] = array('name' => $parts[0]);
+      }
+      
+    }
+  }
+  
+  return $items;
+}
+
+/**
+ * Array sorting callback; sorts taxa by name.
+ */
+function _taxon_navigation_sort_taxa($a, $b) {
+  return strcasecmp($a['name'], $b['name']);
+}
+
+/**
+ * Returns HTML for a taxon tree.
+ * 
+ * @param $variables
+ *   An associative array containing:
+ *   - taxa: An array with taxa.
+ *   - parent_name: Taxon name for which item to append child_tree to (optional).
+ *   - child_tree: A previously themed taxon tree to use as a child tree (optional).
+ * 
+ * @ingroup themeable
+ */
+function theme_taxon_tree(&$variables) {
+  $taxa = $variables['taxa'];
+  $parent_name = $variables['parent_name'];
+  $child_tree = $variables['child_tree'];
+  
+  $output = '<ul class="taxon-tree">';
+  foreach ($taxa as $taxon) {
+    $link = l($taxon['name'], taxon_path($taxon['name']));
+    
+    if (!isset($taxon['children_count']) || !empty($taxon['children_count'])) {
+      $class = 'has-children';
+    }
+    else {
+      $class = 'no-children';
+    }
+    
+    if ($parent_name == $taxon['name']) {
+      $output .= '<li class="' . $class . ' expanded">' . $link . $child_tree . '</li>';
+    }
+    else {
+      $output .= '<li class="' . $class . '">' . $link . '</li>';
+    }
+        
+  }
+  $output .= '</ul>';
+  
+  return $output;
+}
+
+/**
+ * Menu callback; taxa listing.
+ * @todo Render a list with top nodes?
+ */
+function taxon_navigation_page_taxonomic_view() {
+  return '';
+}
+
+/**
+ * Menu callback; taxa listing.
+ * @todo Render a full list of taxa?
+ */
+function taxon_navigation_page_quick_view() {
+  $content = array();
+  $content['#markup'] = '<div id="taxon-browser" class="taxon-list"></div>';
+  $content['#attached']['js'][] = drupal_get_path('module', 'taxon_navigation') . '/js/browser.js';
+    
+  return $content;
+}

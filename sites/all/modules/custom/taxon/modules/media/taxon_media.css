@@ -1,0 +1,158 @@
+/* Galleries, Latest images etc */
+div.taxon-mediaset ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+div.taxon-mediaset ul li {
+  margin: 0 10px;
+  float: left;
+  width: 200px;
+  height: 260px;
+  text-align: center;
+}
+
+div.taxon-mediaset ul li div.taxon-image {
+  position: relative;
+  height: 150px;
+}
+
+div.taxon-mediaset ul li div.taxon-image a {
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
+div.taxon-mediaset ul li div.taxon-image a img {
+  display: block;
+  margin: 0 auto;
+}
+
+div.taxon-mediaset ul li dl {
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+div.taxon-mediaset ul li dl dt {
+  position: absolute;
+  top: -10000px;
+  left: -10000px;
+}
+
+div.taxon-mediaset ul li dl dd {
+  margin: 0;
+  padding: 0;
+}
+
+div.taxon-mediaset ul li dl dd.title a {
+  font-style: italic;
+}
+
+/* Thumbnails on the taxon page */
+#taxon-media-thumbnails ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#taxon-media-thumbnails ul li {
+  float: left;
+  margin: 0 5px 5px 0;
+  height: 150px;
+}
+
+#taxon-media-thumbnails ul li a,
+#taxon-media-thumbnails ul li a img {
+  display: block;
+}
+
+#taxon-media-thumbnails ul li div.taxon-image {
+  position: relative;
+}
+
+/* Video thumbnails */
+div.taxon-image span.play {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 90px;
+  bottom: 0;
+  background: url(images/play.png) no-repeat center center;
+}
+
+#taxon-media-manage-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#taxon-media-manage-list > li {
+  position: relative;
+  float: left;
+  margin: 5px;
+  padding: 2px;
+  width: 150px;
+  height: 140px;
+  text-align: center;
+  background: #666666;
+  background: rgba(0, 0, 0, 0.6);  
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  border-radius: 5px;
+  -webkit-box-shadow: 2px 3px 3px rgba(0, 0, 0, 0.4);
+  -moz-box-shadow: 2px 3px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: 2px 3px 3px rgba(0, 0, 0, 0.4);
+  border: 3px solid #ccc;
+  color: #ccc;
+}
+
+#taxon-media-manage-list.ui-sortable > li {
+  cursor: move;
+}
+
+#taxon-media-manage-list img {
+  max-width: 80px;
+  max-height: 80px;
+}
+
+#taxon-media-manage-list span {
+  display: block;
+  padding: 4px 0;
+  font-size: 10px;
+}
+
+#taxon-media-manage-list .links {
+  position: absolute;
+  bottom: 5px;
+  left: 0;
+  right: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#taxon-media-manage-list .links li {
+  font-size: 12px;
+  padding: 0 6px 0 2px;
+  display: inline-block;
+  border-right: 1px solid #999;
+}
+
+#taxon-media-manage-list .links li.last {
+  border: none;
+}
+
+#taxon-media-manage-list .links a {
+  color: #ccc;
+  text-decoration: none;
+}
+
+#taxon-media-manage-list .links a:hover {
+  color: #fff;
+}

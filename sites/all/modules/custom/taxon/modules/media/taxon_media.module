@@ -1,0 +1,1019 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Enables media to be displayed on taxon pages. Allows users to upload and manage media.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function taxon_media_menu() {
+  
+  $items['taxon/%taxon/media/manage'] = array(
+    'title' => 'Manage media',
+    'page callback' => 'taxon_media_page_manage',
+    'page arguments' => array(1),
+    'access arguments' => array('access taxon media overview'),
+    'weight' => 5,
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_PAGE,
+    'file' => 'taxon_media.pages.inc',
+  );
+ 
+  $items['taxon_media/%taxon_media/edit'] = array(
+    'title' => 'Edit metadata',
+    'page callback' => 'taxon_media_page_edit',
+    'page arguments' => array(1),
+    'access callback' => 'taxon_media_access',
+    'access arguments' => array('edit', 1),    
+    'weight' => 0,
+    'file' => 'taxon_media.pages.inc',
+    // @todo choose type option to use.
+  );
+  
+  $items['taxon_media/%taxon_media/delete'] = array(
+    'title' => 'Delete',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('taxon_media_delete_confirm', 1),
+    'access callback' => 'taxon_media_access',
+    'access arguments' => array('delete', 1),
+    'weight' => 1,
+    'file' => 'taxon_media.pages.inc'
+     // @todo choose type option to use.
+  );
+  
+  $items['taxon_media/hall_of_fame'] = array(
+    'title' => 'Hall of fame',
+    'page callback' => 'taxon_media_page_hall_of_fame',
+    'access callback' => TRUE,
+    'file' => 'taxon_media.pages.inc',
+  );
+  
+  $items['taxon_media/photographer/%'] = array(
+    'page callback' => 'taxon_media_page_photographer',
+    'page arguments' => array(2),
+    'access callback' => TRUE,
+    'file' => 'taxon_media.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+  
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function taxon_media_permission() {
+  return array(
+    'access taxon media overview' => array(
+      'title' => t('Access taxon media overview'),
+    ),
+    'upload taxon media' => array(
+      'title' => t('Upload taxon media'),
+    ),
+    'edit own taxon media' => array(
+      'title' => t('Edit own taxon media'),
+    ),
+    'edit any taxon media' => array(
+      'title' => t('Edit any taxon media'),
+    ),
+    'delete own taxon media' => array(
+      'title' => t('Delete own taxon media'),
+    ),
+    'delete any taxon media' => array(
+      'title' => t('Delete any taxon media'),
+    ),
+    'update taxon media lists' => array(
+      'title' => t('Update taxon media lists'),
+    )
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function taxon_media_theme() {
+  return array(
+    'taxon_media' => array(
+      'template' => 'templates/taxon-media',
+      'variables' => array('media' => NULL),
+    ),
+    'taxon_media_image' => array(
+      'variables' => array('media_id' => NULL, 'version' => 'small'),
+    ),
+    'taxon_media_video' => array(
+      'variables' => array('media_id' => NULL),
+    ),
+    'taxon_media_thumbnail' => array(
+      'variables' => array('media' => NULL),
+    ),
+    'taxon_media_metadata' => array(
+      'template' => 'templates/taxon-media-metadata',
+      'variables' => array('metadata' => NULL, 'field_list' => array()),
+    ),
+    'taxon_media_list' => array(
+      'template' => 'templates/taxon-media-list',
+      'variables' => array('media' => NULL, 'field_list' => array()),
+    ),
+    'taxon_mediaset' => array(
+      'template' => 'templates/taxon-mediaset',
+      'variables' => array('media' => NULL),
+    ),
+    'taxon_media_manage' => array(
+      'template' => 'templates/taxon-media-manage',
+      'variables' => array('media' => NULL),
+    ),
+  );
+}
+
+/**
+ * Implement hook_filter_info().
+ */
+function taxon_media_filter_info() {
+  $filters['taxon_media'] = array(
+    'title' => t('Insert taxon mediasets'),
+    'description' => t('Allows users to insert taxon mediasets into content'),
+    'process callback' => '_taxon_media_filter_process',
+    'tips callback' => '_taxon_media_filter_tips',
+    'cache' => FALSE, // Note: setting this to FALSE makes the entire text format not cacheable, which may have an impact on the site's overall performance.
+  );
+  return $filters;
+}
+
+/**
+ * Media filter process callback.
+ */
+function _taxon_media_filter_process($text, $filter, $format) {
+  $text = preg_replace_callback('/\[taxon-media (.+)\]/', '_taxon_media_filter_callback', $text);
+  return $text;
+}
+
+/**
+ * Media filter preg replace callback.
+ */
+function _taxon_media_filter_callback($matches) {
+  $params = array_merge(array(
+    'filter' => '',
+    'value'  => '',
+    'pager'  => 'yes',
+    'limit'  => 100,
+  ), _taxon_media_filter_parse_params($matches[1]));
+  
+  $filter = $params['filter'];
+  $value = !empty($params['value']) ? $params['value'] : FALSE;
+  $limit = intval($params['limit']);
+  $pager = in_array(strtolower($params['pager']), array('yes', 'true', '1'));
+  
+  $media = taxon_media_get_by_filter($filter, $value, $pager, $limit);
+  
+  $output = theme('taxon_mediaset', array('media' => $media));
+  if ($pager) {
+    $output .= theme('pager');
+  }
+  return $output;
+}
+
+/**
+ * Parses parameters for the input filter.
+ */
+function _taxon_media_filter_parse_params($content) {
+  $params = array();
+  foreach (explode(';', $content) as $part) {
+    
+    if (strpos($part, ':') === FALSE) {
+      continue;
+    }
+    
+    list($name, $value) = explode(':', $part, 2);
+    $name = strtolower(trim($name));
+    $value = trim($value);
+    
+    if (!empty($name)) {
+      $params[$name] = $value;
+    }
+    
+  }
+  
+  return $params;
+}
+
+
+/**
+ * Media filter tips callback.
+ */
+function _taxon_media_filter_tips($filter, $format, $long = FALSE) {
+  $output = t('<em>[taxon-media filter:gallery; value:helcom-peg]</em> is replaced with a gallery.');
+  return $output;
+}
+
+/**
+ * Implements hook_user_update().
+ */
+function taxon_media_user_update(&$edit, $account, $category) {
+  // Update user_name in taxa_media if users changes their username.
+  if ($account->name != $account->original->name) {
+    taxon_db_update('taxa_media')
+      ->fields(array('user_name' => $account->name))
+      ->condition('user_name', $account->original->name)
+      ->execute();
+  }
+}
+
+/**
+ * Title callback.
+ */
+function taxon_media_page_title($media) {
+  return $media->media_id;
+}
+
+/**
+ * Implements hook_taxon_view().
+ */
+function taxon_media_taxon_view($taxon) {
+  // Add media to the taxon page content, if any.
+  if (count($taxon->media) > 0) {    
+    $taxon->content['media'] = array(
+      '#theme' => 'taxon_media',
+      '#media' => $taxon->media,
+      '#weight' => 5,
+    );
+  }
+}
+
+/**
+ * Determine wether current user has access to a particular taxon media.
+ * 
+ * @param $op
+ *   The operation that is to be performed on the taxon media.
+ * @param $media
+ *   The taxon media object (or taxon media array).
+ * @return
+ *   TRUE if current user has access to the taxon media, FALSE otherwise.
+ */
+function taxon_media_access($op, $media) {
+  global $user;
+  
+  $media = (object) $media;
+  
+  if ($op == 'edit') {
+    return ($user->uid && $user->name == $media->user_name && user_access('edit own taxon media')) || user_access('edit any taxon media');
+  } else if ($op == 'delete') {
+    return ($user->uid && $user->name == $media->user_name && user_access('delete own taxon media')) || user_access('delete any taxon media');
+  }
+  
+  return FALSE;
+}
+
+/**
+ * Process variables for taxon-media.tpl.php
+ * 
+ * The $variables array contains the following arguments:
+ * - $media
+ * 
+ * @see taxon-media.tpl.php
+ */
+function template_preprocess_taxon_media(&$variables) {
+  $settings = taxon_get_settings('Media view');
+  
+  $media = $variables['media'];
+  
+  // Figure out which media item to display based on GET parameter.
+  $params = drupal_get_query_parameters();
+  if (isset($params['media_id'])) {
+    foreach ($media as $media_item) {
+      if ($media_item['media_id'] == $params['media_id']) {
+        $display_media = $media_item;
+        break;
+      }
+    }
+  }
+  
+  // First item in the array is assumed to be the 'default' media.
+  $default_media = reset($media);
+  if (!isset($display_media)) {
+    $display_media = $default_media;
+  }
+  
+  // Theme 'image' and 'original_link' differently depending on media type.
+  switch ($display_media['media_type']) {
+    default: // @todo: Remove when all rows in the database has a media_type value.
+    case 'image':
+      $variables['image'] = theme('taxon_media_image', array('media_id' => $display_media['media_id'], 'version' => 'large'));
+      $variables['original_link'] = l(t('View image in original size'), taxon_media_image_url($display_media['media_id'], 'original'));
+      break;
+    case 'video':
+      $variables['image'] = theme('taxon_media_video', array('media_id' => $display_media['media_id']));
+      $variables['original_link'] = '';
+      break;
+  }
+  
+  // Sanitize title, caption and photographer.
+  $variables['title'] = '';
+  if (!empty($display_media['metadata']['Title'])) {
+    $variables['title'] = check_plain($display_media['metadata']['Title']);
+  }
+  
+  $variables['caption'] = '';
+  if (!empty($display_media['metadata']['Caption'])) {
+    $variables['caption'] = filter_xss($display_media['metadata']['Caption']);
+  }
+  
+  $variables['photographer'] = '';
+  if (!empty($display_media['metadata']['Photographer/artist'])) {
+    $variables['photographer'] = check_plain($display_media['metadata']['Photographer/artist']);
+  }
+  
+  // Process and theme metadata fields specified in "Media view.Field list" settings.
+  $variables['metadata'] = theme('taxon_media_metadata', array('metadata' => $display_media['metadata'], 'field_list' => $settings['Field list']));
+  
+  // Process and theme thumbnails.
+  $variables['thumbnails'] = '';
+  if (count($media) > 1) {
+    $variables['thumbnails'] = theme('taxon_media_list', array('media' => $media));
+  }
+}
+
+/**
+ * Process variables for taxon-media-list.tpl.php
+ *
+ * The $variables array contains the following arguments:
+ * - $media
+ * - $field_list
+ *
+ * @see taxon-media-list.tpl.php
+ */
+function template_preprocess_taxon_media_list(&$variables) {
+  $media_items = array();
+  foreach ($variables['media'] as $media) {
+    $media_items[] = array(
+      'image' => theme('taxon_media_thumbnail', array('media' => $media)),
+      'metadata' => theme('taxon_media_metadata', array('metadata' => $media['metadata'], 'field_list' => $variables['field_list'])),
+    );
+  }
+  $variables['media'] = $media_items;
+}
+
+/**
+ * Process variables for taxon-mediaset.tpl.php
+ * 
+ * The $variables array contains the following arguments:
+ * - $media
+ * 
+ * @see taxon-mediaset.tpl.php
+ */
+function template_preprocess_taxon_mediaset(&$variables) {  
+  $settings = taxon_get_settings('Mediaset view');
+  $variables['media'] = theme('taxon_media_list', array('media' => $variables['media'], 'field_list' => $settings['Field list']));
+}
+
+/**
+ * Process variables for taxon-media-metadata.tpl.php
+ * 
+ * The $variables array contains the following arguments:
+ * - $metadata
+ * - $fields
+ * 
+ * @see taxon-media-metadata.tpl.php
+ */
+function template_preprocess_taxon_media_metadata(&$variables) {
+  $metadata = array();
+  
+  foreach ($variables['field_list'] as $field) {
+    if (isset($variables['metadata'][$field])) {
+      $value = $variables['metadata'][$field];
+
+      // Handle multiple-values/lists.
+      if (is_array($value) && !empty($value)) {
+        $metadata[] = array(
+          'field' => check_plain($field),
+          'value' => check_plain(implode(', ', $value)),
+        );
+      } 
+      // Handle single-values.
+      elseif (is_string($value) && $value !== '') {
+        if (($field === 'Date added') && (($time = strtotime($value)) !== FALSE)) {
+          $value = format_date($time, 'custom', 'M j, Y');
+        } else {
+          $value = filter_xss($value);
+        }
+        $metadata[] = array(
+          'field' => check_plain($field),
+          'value' => $value,
+        );
+      }
+    }  
+  }
+  
+  $variables['metadata'] = $metadata;
+}
+
+/**
+ * Process variables for taxon-media-manage.tpl.php
+ * 
+ * The $variables array contains the following arguments:
+ * - $media
+ * 
+ * @see taxon-media-manage.tpl.php
+ */
+function template_preprocess_taxon_media_manage(&$variables) {
+  $media_items = array();
+  
+  foreach ($variables['media'] as $media) {
+    $links = array();
+    if (taxon_media_access('edit', $media)) {
+      $links['taxon-media-edit'] = array(
+        'title' => t('Edit'),
+        'href' => 'taxon_media/' . $media['media_id'] . '/edit',
+      );
+    }
+    if (taxon_media_access('delete', $media)) {
+      $links['taxon-media-delete'] = array(
+        'title' => t('Delete'),
+        'href' => 'taxon_media/' . $media['media_id'] . '/delete',
+      );
+    }
+    
+    $media_items[] = array(
+      'media_id' => check_plain($media['media_id']),
+      'image' => theme('taxon_media_image', array('media_id' => $media['media_id'], 'version' => 'small')),
+      'links' => theme('links', array('links' => $links)),
+    );
+  }
+  
+  $variables['media'] = $media_items;
+}
+
+/**
+ * Returns HTML for a taxon media image.
+ *
+ * @param $variables
+ *   An associative array containing:
+ *   - media_id: Media ID.
+ *   - version: small, medium, large or original.
+ *
+ * @ingroup themeable
+ */
+function theme_taxon_media_image($variables) {  
+  $version = $variables['version'];
+  $media_id = $variables['media_id'];
+  $path = taxon_media_image_url($media_id, $version);
+  
+  return theme('image', array('path' => $path));
+}
+
+/**
+ * Returns HTML for a video player.
+ *
+ * @param $variables
+ *   An associative array containing:
+ *   - media_id: Media ID.
+ *
+ * @ingroup themeable
+ */
+function theme_taxon_media_video($variables) {
+  $media_id = $variables['media_id'];
+  $video_id = taxon_media_id_to_video_id($media_id);
+  
+  $source = 'http://www.youtube.com/embed/' . $video_id;
+  $width = 640; // Note: Same as the default width in the YouTube Iframe API.
+  $height = 390; // Note: Same as the default height in the YouTube Iframe API.
+  
+  $iframe_format = '<iframe width="%d" height="%d" src="%s" frameborder="0" allowfullscreen></iframe>';
+  $iframe = sprintf($iframe_format, $width, $height, $source);
+  return $iframe;
+}
+
+/**
+ * Returns HTML for a thumbnail.
+ * 
+ * @param $variables
+ *   An associative array containing:
+ *   - media: The media item.
+ * 
+ * @ingroup themeable
+ */
+function theme_taxon_media_thumbnail($variables) {
+  $media = $variables['media'];
+  $media_id = $media['media_id'];
+  $taxon_name = taxon_media_id_to_taxon_name($media_id);
+  
+  $image = theme('taxon_media_image', array(
+    'media_id' => $media_id,
+    'version'  => 'small',
+  ));
+  
+  if ($media['media_type'] == 'video') {
+    // Add a play icon to video thumbnails.
+    $image .= '<span class="play"></span>';
+  }
+  
+  // Merge media_id with other GET parameters.
+  $query = array('media_id' => $media_id) + drupal_get_query_parameters();
+  
+  // Create URL to the taxon page with media_id in the query string.
+  $url = url(taxon_path($taxon_name), array('query' => $query));
+  
+  return '<a href="' . $url . '">' . $image . '</a>';
+}
+
+/**
+ * Returns URL to a taxon image.
+ *
+ * @param $media_id
+ *   The id of the media to retrieve an image URL for.
+ *
+ * @param $version
+ *   Name of the image version to retrieve an URL for.
+ *   For example: "original", "large" or "small".
+ */
+function taxon_media_image_url($media_id, $version) {
+  global $base_root;
+  
+  if (strpos($media_id, '_youtube_') !== FALSE) {
+    // Create URL to a thumbnail at YouTube.
+    $video_id = taxon_media_id_to_video_id($media_id);
+    $quality = $version == 'small' ? 'default' : 'hqdefault';
+    $media_url = 'http://i.ytimg.com/vi/' . $video_id . '/' . $quality . '.jpg';
+  }
+  else {
+    // Create URL to an internal image.
+    $host = parse_url($base_root, PHP_URL_HOST);
+    $filename = trim(pathinfo($media_id, PATHINFO_FILENAME), '.');
+    $media_url = 'http://media.' . $host . '/' . $version . '/' . $filename . '.jpg'; 
+  }
+
+  return $media_url;
+}
+
+/**
+ * Returns taxon name for a media id.
+ */
+function taxon_media_id_to_taxon_name($media_id) {
+  // Local media and external video has different separators in the media id.
+  if (strpos($media_id, '_youtube_') !== FALSE) {
+    $separator = '_youtube_';
+  }
+  else {
+    $separator = '_';
+  }
+  
+  // Split by separator and remove the last part, which is either a number or 
+  // an external identifier.
+  $parts = explode($separator, $media_id);
+  array_pop($parts);
+  
+  // Remaining parts should be name of the taxon, with slashes replaced by
+  // underscores.
+  $taxon_name = implode($separator, $parts);
+  $taxon_name = str_replace('_', '/', $taxon_name);
+  
+  return $taxon_name;
+}
+
+/**
+ * Returns YouTube video id for a media id.
+ */
+function taxon_media_id_to_video_id($media_id) {
+  $parts = explode('_youtube_', $media_id, 2);
+  return $parts[1];
+}
+
+/**
+ * Generates unique media filename based on taxon name.
+ * @todo clearstatcache?
+ */
+function taxon_media_unique_filename($taxon_name) {
+  module_load_include('php', 'taxon_media', 'settings');
+
+  $name = str_replace('/', '_', $taxon_name);
+  $number = 1;
+  $pattern_mask = TAXON_MEDIA_DIRECTORY . DIRECTORY_SEPARATOR . "%s.*";
+  do {
+    $filename = sprintf('%s_%u', $name, $number++);
+  } while (($match = glob(sprintf($pattern_mask, $filename))) && (count($match) > 0));
+
+  return $filename;
+}
+
+/**
+ * Generates image versions for one media.
+ * @todo Better configuration for different versions.
+ * @todo Better way to force/save as jpeg.
+ */
+function taxon_media_create_versions($media_id) {
+  module_load_include('php', 'taxon_media', 'settings');
+  
+  $filename = trim(pathinfo($media_id, PATHINFO_FILENAME), '.');
+  $basename = trim(pathinfo($media_id, PATHINFO_BASENAME), '.');
+  
+  // Load the original image.
+  $img = image_load(TAXON_MEDIA_DIRECTORY . DIRECTORY_SEPARATOR . $basename);
+  
+  // Force JPEG as output format.
+  $img->info['extension'] = 'jpg';
+  
+  // Save a public version in the original size.
+  image_save($img, TAXON_MEDIA_PUBLIC_DIRECTORY . DIRECTORY_SEPARATOR . 'original' 
+                                                . DIRECTORY_SEPARATOR . $filename . '.jpg');
+  // Create large version.
+  image_scale($img, 700);
+  image_save($img, TAXON_MEDIA_PUBLIC_DIRECTORY . DIRECTORY_SEPARATOR . 'large' 
+                                                . DIRECTORY_SEPARATOR . $filename . '.jpg');
+  // Create small version.
+  image_scale($img, 200, 150);
+  image_save($img, TAXON_MEDIA_PUBLIC_DIRECTORY . DIRECTORY_SEPARATOR . 'small' 
+                                                . DIRECTORY_SEPARATOR . $filename . '.jpg');
+}
+
+/**
+ * Delete image versions for one media.
+ * 
+ * @param $media_id
+ *   The media id to delete versions for.
+ */
+function taxon_media_delete_versions($media_id) {
+  module_load_include('php', 'taxon_media', 'settings');
+  
+  $filename = trim(pathinfo($media_id, PATHINFO_FILENAME), '.');
+  $basename = trim(pathinfo($media_id, PATHINFO_BASENAME), '.');
+  
+  file_unmanaged_delete(TAXON_MEDIA_PUBLIC_DIRECTORY . DIRECTORY_SEPARATOR . 'original'
+                                                     . DIRECTORY_SEPARATOR . $filename . '.jpg');
+  
+  file_unmanaged_delete(TAXON_MEDIA_PUBLIC_DIRECTORY . DIRECTORY_SEPARATOR . 'large'
+                                                     . DIRECTORY_SEPARATOR . $filename . '.jpg');
+
+  file_unmanaged_delete(TAXON_MEDIA_PUBLIC_DIRECTORY . DIRECTORY_SEPARATOR . 'small'
+                                                     . DIRECTORY_SEPARATOR . $filename . '.jpg');
+}
+
+/**
+ * Load a taxon media object from the database.
+ * 
+ * @param $media_id
+ *   The media id
+ * 
+ * @return
+ *   A populated taxon media object.
+ */
+function taxon_media_load($media_id) {  
+  $media = taxon_db_select('taxa_media', 'm')
+    ->fields('m', array('taxon_id', 'media_id', 'media_type', 'user_name', 'metadata_json'))
+    ->condition('media_id', $media_id)
+    ->execute()
+    ->fetchObject();
+  
+  if ($media) {
+    // Decode JSON metadata into an associative array.
+    $media->metadata = json_decode($media->metadata_json, TRUE);
+    unset($media->metadata_json);
+  }
+  
+  return $media;
+}
+
+/**
+ * Find media by filter.
+ *
+ * @param $filter
+ *   Name of the filter.
+ * @param $value
+ *   Value of the filter.
+ * @param $pager
+ *   A boolean indicating whether the pager mechanism should be used or not.
+ * @param $limit
+ *   An integer specifying the maximum number of media to load.
+ *   If $pager and $limit is set to FALSE, no limit will be used.
+ *
+ * @return
+ *   An array of media items or an empty array if there are no matches.
+ */
+function taxon_media_get_by_filter($filter, $value = FALSE, $pager = TRUE, $limit = FALSE) {
+  $query = taxon_db_select('taxa_media', 'm')
+    ->fields('m', array('media_id', 'media_type', 'user_name', 'metadata_json'));
+  
+  $query->join('taxa_media_filter_search', 'f', 'm.media_id = f.media_id');
+  
+  $query->condition('f.filter', $filter);
+  
+  if ($value !== FALSE) {
+    $query->condition('f.value', $value);
+  }
+  
+  if ($pager) {
+    $query = $query->extend('PagerDefault');
+  }
+  
+  if ($limit !== FALSE) {
+    if ($pager) {
+      $query->limit($limit);
+    } else{
+      $query->range(0, $limit);
+    }
+  }
+  
+  if ($filter === 'Latest images') {
+    $query->orderBy('f.value', 'DESC');
+  } else {
+    $query->orderBy('m.media_id');
+  }
+  
+  $media = $query->execute()->fetchAll();
+
+  foreach ($media as $key => $media_item) {
+    $media_item->metadata = json_decode($media_item->metadata_json, TRUE);
+    unset($media_item->metadata_json);
+    $media[$key] = (array) $media_item;
+  }
+  
+  return $media;
+}
+
+/**
+ * Save uploaded file.
+ *
+ * Copies a temporary saved file upload to a permanent location and adds a 
+ * record to the taxa_media table in the database. The temporary saved file 
+ * upload will be deleted immediately after it has been copied.
+ * 
+ * @param $taxon_id
+ *   Integer specifying taxon id to add uploaded media for.
+ * @param $file
+ *   A Drupal file object returned by file_save_upload().
+ *
+ * @return
+ *   A populated media object on success, or FALSE on failure.
+ */
+function taxon_media_save_upload($taxon_id, $file) {  
+  module_load_include('php', 'taxon_media', 'settings');
+  
+  // Get taxon name.
+  $taxon_name = taxon_id_to_name($taxon_id);
+  
+  // Choose location for the file based on taxon name.
+  $filename = taxon_media_unique_filename($taxon_name);
+  $extension = pathinfo($file->filename, PATHINFO_EXTENSION);
+  $basename = trim(basename($filename . '.' . $extension), '.');
+  $destination = TAXON_MEDIA_DIRECTORY . DIRECTORY_SEPARATOR . $basename;
+  
+  // Copy temporary file to it's permanent location.
+  $path = file_unmanaged_copy($file->uri, $destination, FILE_EXISTS_ERROR);
+  
+  // Abort if the file coud not be copied.
+  if ($path === FALSE) {
+    return FALSE;
+  }
+  
+  // Create and populate a media object.
+  $media = new stdClass;
+  $media->media_id = pathinfo($path, PATHINFO_BASENAME);
+  $media->taxon_id = $taxon_id;
+  $media->media_type = 'image';
+  $media->metadata['Media format'] = $file->filemime;
+  
+  // Save to the database.
+  $result = taxon_media_save($media);
+  
+  // Abort if the record could not be saved.
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  
+  // Generate public verions of the file (thumbnails etc).
+  taxon_media_create_versions($media->media_id);
+  
+  // Delete the temporary Drupal file.
+  file_delete($file);
+  
+  return $media;
+}
+
+/**
+ * Save video link.
+ *
+ * Adds a record to taxa_media in the database. The generated media id will
+ * consist of a taxon name and a YouTube video id, with _youtube_ used as 
+ * delimiter.
+ *
+ * @param $taxon_id
+ *   Integer specifying taxon id to add media for.
+ * @param $video_id
+ *   A YouTube Video ID.
+ *
+ * @return
+ *   A populated media object on success, or FALSE on failure.
+ */
+function taxon_media_save_video_link($taxon_id, $video_id) {  
+  // Get taxon name.
+  $taxon_name = taxon_id_to_name($taxon_id);
+  
+  // Create a media_id.
+  $name = str_replace('/', '_', $taxon_name);
+  $media_id = $name . '_youtube_' . $video_id;
+  
+  // Create and populate a media object.
+  $media = new stdClass;
+  $media->media_id = $media_id;
+  $media->taxon_id = $taxon_id;
+  $media->media_type = 'video';
+  $media->metadata['Media format'] = 'video/youtube';
+  
+  // Save to the database.
+  $result = taxon_media_save($media);
+  
+  // Abort if the record could not be saved.
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  
+  return $media;
+}
+
+/**
+ * Add new taxon media.
+ *
+ * @param $media
+ *   The media object to be saved.
+ *
+ * @return 
+ *   TRUE on success, or FALSE on error.
+ */
+function taxon_media_save($media) {
+  global $user;
+  
+  if (empty($media->metadata['Date added'])) {
+    // Note: Format a date using the timezone configured in the administration.
+    $media->metadata['Date added'] = format_date(time(), 'custom', 'Y-m-d H:i:s');
+  }
+  
+  if (empty($media->user_name)) {
+    $media->user_name = $user->name;
+  }
+  
+  $result = taxon_db_insert('taxa_media')
+    ->fields(array(
+      'media_id' => $media->media_id,
+      'taxon_id' => $media->taxon_id,
+      'media_type' => $media->media_type,
+      'user_name' => $media->user_name,
+      'metadata_json' => json_encode($media->metadata),
+    ))
+    ->execute();
+  
+  // Abort if the record could not be stored in the database.
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  
+  // Get media list for the taxon and append the new media_id to end of the list.
+  $media_list = taxon_media_list_get_by_taxon_id($media->taxon_id);
+  $media_list[] = $media->media_id;
+  
+  // Update media list in the database.
+  taxon_media_list_save($media->taxon_id, $media_list);
+  
+  // Allow other modules to update their data.
+  module_invoke_all('taxon_media_insert', $media);
+  
+  return TRUE;
+}
+
+/**
+ * Save taxon media metadata.
+ * 
+ * @param $media_id
+ *   The media id to update metadata for.
+ * @param $edit
+ *   An associative array of fields and values to save.
+ *   For example array('Creator' => 'John Doe'). Existing data
+ *   will be merged with the $edit array before saving.
+ */
+function taxon_media_save_metadata($media_id, $edit) {
+  
+  // Load unchanged metadata from the database.
+  $metadata = taxon_db_query('SELECT metadata_json FROM taxa_media WHERE media_id = :media_id', array(':media_id' => $media_id))->fetchField();
+  
+  // Abort if the record does not exists in the database.
+  if ($metadata === FALSE) {
+    return FALSE;
+  }
+  
+  // Decode JSON into an associative array.
+  $metadata = json_decode($metadata, TRUE);
+  
+  // Merge existing $metadata with $edit
+  $edit = array_merge($metadata, $edit);
+  
+  // Write to the database.
+  $result = taxon_db_update('taxa_media')
+    ->fields(array('metadata_json' => json_encode($edit)))
+    ->condition('media_id', $media_id)
+    ->execute();
+  
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  
+  // Allow other modules to update their data.
+  module_invoke_all('taxon_media_metadata_update', $edit, $metadata, $media_id);
+  
+  return TRUE;
+}
+
+/**
+ * Delete taxon media.
+ * 
+ * @param $media_id
+ *   Id of the media to delete.
+ */
+function taxon_media_delete($media_id) {
+  // Load media from the database.
+  $media = taxon_media_load($media_id);
+
+  // Abort if the record does not exists in the database.
+  if ($media === FALSE) {
+    return FALSE;
+  }  
+  
+  // Delete record from the database.
+  $result = taxon_db_delete('taxa_media')
+    ->condition('media_id', $media_id)
+    ->execute();
+  
+  // Abort if the record could not be deleted.
+  if ($result === FALSE) {
+    return FALSE;
+  }
+  
+  // Get media list from the database.
+  $media_list = taxon_media_list_get_by_taxon_id($media->taxon_id);
+  
+  // Remove media_id from the array and save the updated media list.
+  if (($key = array_search($media_id, $media_list)) !== FALSE) {
+    unset($media_list[$key]);
+    taxon_media_list_save($media->taxon_id, $media_list);
+  }
+  
+  module_load_include('php', 'taxon_media', 'settings');
+  
+  // Delete any localy stored files.
+  if (is_file(TAXON_MEDIA_DIRECTORY . DIRECTORY_SEPARATOR . $media_id)) {
+    // Delete the original file.
+    file_unmanaged_delete(TAXON_MEDIA_DIRECTORY . DIRECTORY_SEPARATOR . $media_id);
+  
+    // Delete the public versions of the file.
+    taxon_media_delete_versions($media_id);
+  }
+  
+  // Allow other modules to update their data.
+  module_invoke_all('taxon_media_delete', $media);
+  
+  return TRUE;
+}
+
+/**
+ * Find media list by taxon id.
+ * 
+ * @param $taxon_id
+ *   Integer specifying taxon id to load media list for.
+ * 
+ * @return
+ *   An array of media id's or an empty array if there are no
+ *   media list for the specified taxon id. 
+ */
+function taxon_media_list_get_by_taxon_id($taxon_id) {
+  $media_list = taxon_db_query('SELECT media_list FROM taxa_media_list WHERE taxon_id = :taxon_id', array(':taxon_id' => $taxon_id))->fetchField();
+  
+  return $media_list ? explode(';', $media_list) : array();
+}
+
+/**
+ * Saves a taxon media list.
+ * 
+ * @param $taxon_id
+ *   Taxon id to save media list for.
+ * @param $media_list
+ *   An array with media_id's. For example: array('Dinophysis acuta_1.jpg', 'Dinophysis acuta_2.jpg').
+ */
+function taxon_media_list_save($taxon_id, $media_list) {
+  $count = taxon_db_query('SELECT COUNT(*) FROM taxa_media_list WHERE taxon_id = :taxon_id', array(':taxon_id' => $taxon_id))->fetchField();
+  
+  if ($count == 0) {
+    // Add list to the database.
+    taxon_db_insert('taxa_media_list')
+      ->fields(array(
+        'taxon_id' => $taxon_id,
+        'media_list' => implode(';', $media_list),
+      ))
+      ->execute();
+  }
+  else {
+    // Update list in the database.
+    taxon_db_update('taxa_media_list')
+      ->fields(array('media_list' => implode(';', $media_list)))
+      ->condition('taxon_id', $taxon_id)
+      ->execute();
+  }
+}

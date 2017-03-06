@@ -1,0 +1,139 @@
+.taxon-list table {
+  width: 100%;
+}
+
+.taxon-list table th.taxon-image,
+.taxon-list table td.taxon-image {
+  width: 200px;
+}
+
+.taxon-list.hide-images table th.taxon-image,
+.taxon-list.hide-images table td.taxon-image {
+  display: none;
+}
+
+.taxon-browser-limit-options {
+  float: right;
+}
+.taxon-browser-matches {
+  float: left;
+}
+.taxon-browser-pages {
+  padding: 10px 0;
+  text-align: left;
+  clear: both;
+}
+
+.taxon-browser-pages span,
+.taxon-browser-options span {
+  display: inline-block;
+  margin: 0 2px 4px;
+  padding: 1px 5px;
+  background: #f6f6f6;
+  cursor: default;
+}
+
+.taxon-browser-pages span.current,
+.taxon-browser-options span.current {
+  background: #ccc;
+}
+
+.taxon-browser-results {
+  padding: 10px 0 0;
+  clear: both;
+}
+
+.taxon-browser-results.loading {
+  height: 100px;
+  background: url(images/ajax-loader.gif) center center no-repeat;
+}
+
+
+div.taxon-links {
+  padding: 0 0 16px;
+}
+
+div.taxon-links a.taxon-previous {
+  float: left;
+  width: 48%;
+  text-align: left;
+}
+
+div.taxon-links a.taxon-next {
+  float: right;
+  width: 48%;
+  text-align: right;
+}
+
+ul.taxon-tree {
+  margin: 10px 0;
+  padding: 0 !important;
+  list-style: none;
+  background-image: url(images/horizontal-line.gif);
+  background-repeat: repeat-y;
+  background-position: 4px 0;
+}
+
+ul.taxon-tree li,
+ul.taxon-tree li.expanded {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  list-style-image: none;
+}
+
+
+ul.taxon-tree li a,
+ul.taxon-tree li span {
+  display: inline-block;
+  padding: 0 0 0 15px;
+  background-image: url(images/maximize.gif);
+  background-repeat: no-repeat;
+  background-position: left center;
+}
+
+ul.taxon-tree li span {
+  cursor: default;
+}
+
+ul.taxon-tree li.expanded > a,
+ul.taxon-tree li.expanded > span {
+  background-image: url(images/minimize.gif);
+}
+
+ul.taxon-tree li.no-children > a,
+ul.taxon-tree li.no-children > span {
+  background-image: url(images/vertical-line.gif);
+}
+
+ul.taxon-tree li span {
+  padding-right: 5px;
+}
+
+ul.taxon-tree li.current > span {
+  background-color: #CCCCCC;
+}
+
+ul.taxon-tree ul {
+  margin: 2px 0 2px 1em !important;
+}
+
+
+html.js ul.taxon-tree ul {
+  display: none;
+}
+
+html.js ul.taxon-tree li.expanded ul {
+  display: block;
+}
+
+.taxon-groups label {
+  display: block;
+  margin: 4px 0;
+  padding: 3px 4px;
+  cursor: default;
+}
+
+.ui-autocomplete .synonym-name a {
+  color: #ff0000;
+}

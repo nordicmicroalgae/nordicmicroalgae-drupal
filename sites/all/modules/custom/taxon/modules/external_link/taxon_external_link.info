@@ -1,0 +1,7 @@
+name = Taxon External Link
+description = Displays links to external resources on taxon pages.
+dependencies[] = taxon
+core = 7.x
+package = Nordic Microalgae
+files[] = taxon_external_link.module
+stylesheets[all][] = taxon_external_link.css
