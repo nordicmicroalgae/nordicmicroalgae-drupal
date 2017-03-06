@@ -1,0 +1,16 @@
+name = Nordic Microalgae
+description = Custom theme for nordicmicroalgae.org
+core = 7.x
+engine = phptemplate
+
+regions[navigation] = Navigation
+regions[help] = Help
+regions[content] = Content
+regions[sidebar_first] = Sidebar first
+regions[sidebar_second] = Sidebar second
+regions[footer] = Footer
+
+stylesheets[screen][] = css/screen.css
+stylesheets[screen][] = css/jquery.ui.theme.css
+
+scripts[] = js/misc.js
