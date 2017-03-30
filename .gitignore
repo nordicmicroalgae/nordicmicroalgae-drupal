@@ -4,3 +4,6 @@
 # Ignore paths that contain user-generated content.
 sites/*/files
 sites/*/private
+
+# Ignore custom module settings.
+sites/*/modules/custom/**/settings*.php
