@@ -260,6 +260,21 @@ $databases = array (
       'collation' => 'utf8mb4_general_ci',
     ),
   ),
+  'nordicmicroalgae' =>
+  array (
+    'default' =>
+    array (
+      'database' => $_SERVER['NORDICMICROALGAE_DATABASE_NAME'],
+      'username' => $_SERVER['NORDICMICROALGAE_DATABASE_USERNAME'],
+      'password' => $_SERVER['NORDICMICROALGAE_DATABASE_PASSWORD'],
+      'host' => $_SERVER['NORDICMICROALGAE_DATABASE_HOST'],
+      'port' => '',
+      'driver' => 'mysql',
+      'prefix' => '',
+      'charset' => 'utf8mb4',
+      'collation' => 'utf8mb4_general_ci',
+    ),
+  ),
 );
 
 /**
