@@ -44,11 +44,11 @@ h3 {
 }
 
 h4 {
-  
+
 }
 
 h5 {
-  
+
 }
 
 p {
@@ -301,6 +301,22 @@ ul.language-links li {
   margin: 0 8px;
 }
 
+ul.partners-links-and-logotypes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+ul.partners-links-and-logotypes li {
+  margin: 0 10px;
+  display: inline-block;
+}
+
+ul.partners-links-and-logotypes img {
+  display: inline-block;
+  vertical-align: middle;
+}
+
 /* News */
 ul.news {
   margin: 0;
@@ -490,7 +506,7 @@ a.feed-icon {
 }
 
 #footer-wrapper a {
-  color: #666;  
+  color: #666;
 }
 
 #footer-wrapper a:hover {
@@ -502,7 +518,7 @@ div.partner {
   width: 220px;
 }
 
-#partner-smhi, 
+#partner-smhi,
 #partner-smhi img {
   float: left;
 }
