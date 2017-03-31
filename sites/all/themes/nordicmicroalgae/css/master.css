@@ -317,6 +317,29 @@ ul.partners-links-and-logotypes img {
   vertical-align: middle;
 }
 
+dl.faq {
+  margin: 16px 0;
+}
+
+dl.faq dt {
+  font-weight: bold;
+}
+
+dl.faq dd {
+  margin: 5px 10px 5px;
+}
+
+dl.faq dd:nth-child(4),
+dl.faq dd:nth-child(8),
+dl.faq dd:nth-child(12),
+dl.faq dd:nth-child(16),
+dl.faq dd:nth-child(20),
+dl.faq dd:nth-child(24),
+dl.faq dd:nth-child(28),
+dl.faq dd:nth-child(32) {
+  margin-bottom: 32px;
+}
+
 /* News */
 ul.news {
   margin: 0;
