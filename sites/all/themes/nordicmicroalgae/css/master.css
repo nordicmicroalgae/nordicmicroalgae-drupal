@@ -308,12 +308,16 @@ ul.partners-links-and-logotypes {
 }
 
 ul.partners-links-and-logotypes li {
-  margin: 0 10px;
   display: inline-block;
+  margin: 20px 15px;
+  width: 200px;
+  text-align: center;
 }
 
 ul.partners-links-and-logotypes img {
   display: inline-block;
+  max-width: 160px;
+  max-height: 100px;
   vertical-align: middle;
 }
 
@@ -338,6 +342,11 @@ dl.faq dd:nth-child(24),
 dl.faq dd:nth-child(28),
 dl.faq dd:nth-child(32) {
   margin-bottom: 32px;
+}
+
+div.history-names {
+  margin: 60px 0 20px;
+  text-align: center;
 }
 
 /* News */
