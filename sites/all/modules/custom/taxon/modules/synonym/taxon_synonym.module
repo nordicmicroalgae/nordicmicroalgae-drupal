@@ -19,6 +19,26 @@ function taxon_synonym_theme() {
 }
 
 /**
+ * Implements hook_taxon_load().
+ */
+function taxon_synonym_taxon_load($taxon) {
+  if (!isset($taxon->synonyms)) {
+    $taxon->synonyms = array();
+
+    $result = taxon_db_select('taxa_synonyms', 's')
+      ->fields('s', array('synonym_name', 'synonym_author', 'info_json'))
+      ->condition('taxon_id', $taxon->id)
+      ->execute();
+
+    while($row = $result->fetchAssoc()) {
+      $row['info'] = json_decode($row['info_json'], TRUE);
+      unset($row['info_json']);
+      $taxon->synonyms[] = $row;
+    }
+  }
+}
+
+/**
  * Implements hook_taxon_view().
  */
 function taxon_synonym_taxon_view($taxon) {
@@ -33,10 +53,10 @@ function taxon_synonym_taxon_view($taxon) {
 
 /**
  * Process variables for taxon synonyms.
- * 
+ *
  * The $variables array contains the following arguments:
  * - $synonyms
- * 
+ *
  * @see taxon-synonyms.tpl.php
  */
 function template_preprocess_taxon_synonyms(&$variables) {

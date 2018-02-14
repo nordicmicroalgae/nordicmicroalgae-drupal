@@ -20,7 +20,7 @@ function taxon_facts_menu() {
     'context' => MENU_CONTEXT_PAGE,
     'file' => 'taxon_facts.pages.inc',
   );
-  
+
   return $items;
 }
 
@@ -52,6 +52,48 @@ function taxon_facts_theme() {
 }
 
 /**
+ * Implements hook_taxon_load().
+ */
+function taxon_facts_taxon_load($taxon) {
+  if (!isset($taxon->facts)) {
+    $taxon->facts = taxon_db_select('taxa_facts', 'f')
+      ->fields('f', array('facts_json'))
+      ->condition('taxon_id', $taxon->id)
+      ->execute()
+      ->fetchColumn();
+
+    if ($taxon->facts) {
+      $taxon->facts = json_decode($taxon->facts, TRUE);
+    }
+  }
+
+  if (!isset($taxon->external_facts)) {
+    $taxon->external_facts = array();
+
+    $result = taxon_db_select('taxa_external_facts', 'ef')
+      ->fields('ef', array('provider', 'facts_json'))
+      ->condition('taxon_id', $taxon->id)
+      ->execute();
+
+    while($row = $result->fetchObject()) {
+      $taxon->external_facts[$row->provider] = json_decode($row->facts_json, TRUE);
+    }
+  }
+
+  if (!isset($taxon->facts_peg)) {
+    $taxon->facts_peg = taxon_db_select('taxa_helcom_peg', 'hp')
+      ->fields('hp', array('facts_json'))
+      ->condition('taxon_id', $taxon->id)
+      ->execute()
+      ->fetchColumn();
+
+    if ($taxon->facts_peg) {
+      $taxon->facts_peg = json_decode($taxon->facts_peg, TRUE);
+    }
+  }
+}
+
+/**
  * Implements hook_taxon_view().
  */
 function taxon_facts_taxon_view($taxon) {
@@ -75,38 +117,38 @@ function taxon_facts_taxon_view($taxon) {
 
 /**
  * Process variables for taxon-facts.tpl.php
- * 
+ *
  * The $variables array contains the following arguments:
  * - $facts
- * 
+ *
  * @see taxon-facts.tpl.php
  */
 function template_preprocess_taxon_facts(&$variables) {
   $facts = array();
-  
+
   // Show different fields depending on rank.
   switch ($variables['rank']) {
-    case 'Species pair': 
-    case 'Species': 
-    case 'Subspecies': 
-    case 'Variety': 
-    case 'Form': 
+    case 'Species pair':
+    case 'Species':
+    case 'Subspecies':
+    case 'Variety':
+    case 'Form':
     case 'Hybrid':
       $settings = taxon_get_settings('Species view');
       break;
-    
+
     default:
       $settings = taxon_get_settings('Taxon view');
       break;
   }
-  
+
   $fields = $settings['Field list'];
   foreach ($fields as $field) {
     $parts = explode('.', $field);
-    
+
     $type = $parts[0];
     $field = $value = null;
-    
+
     if ($type == 'Facts') {
       $field = $parts[1];
       if (isset($variables['facts'][$field])) {
@@ -120,7 +162,7 @@ function template_preprocess_taxon_facts(&$variables) {
         $value = $variables['external_facts'][$provider][$field];
       }
     }
-    
+
     // Handle multiple-values/lists.
     if (is_array($value) && !empty($value)) {
       $facts[] = array(
@@ -137,45 +179,45 @@ function template_preprocess_taxon_facts(&$variables) {
     }
 
   }
-   
+
   $variables['facts'] = $facts;
 }
 
 /**
  * Process variables for taxon-facts-peg.tpl.php
- * 
+ *
  * The $variables array contains the following arguments:
  * - $facts_peg
- * 
+ *
  * @see taxon-facts-peg.tpl.php
  */
 function template_preprocess_taxon_facts_peg(&$variables) {
   $settings = taxon_get_settings('HELCOM PEG');
-  
+
   $variables['source'] = $settings['Source of data'];
-  
+
   $species = array();
   foreach ($settings['Species fields'] as $field) {
     if (!empty($variables['facts_peg'][$field])) {
       $species[$field] = check_plain($variables['facts_peg'][$field]);
     }
   }
-  
+
   // Replace Geometric shape with an image, if available.
   $geometric_shape = $variables['facts_peg']['Geometric shape'];
   if (!empty($settings['Geometric shape images'][$geometric_shape])) {
     $image_name = $settings['Geometric shape images'][$geometric_shape];
     $image_path = drupal_get_path('module', 'taxon_facts') . '/geometric-shapes/' . $image_name;
-    
+
     $species['Geometric shape'] = theme('image', array('path' => $image_path, 'alt' => $geometric_shape));
   }
-    
+
   $variables['species'] = $species;
 
-  
+
   // Create an array with fields as keys and arrays containing values for each size class as values.
   $size_classes = array();
-  foreach ($settings['Size class fields'] as $field) {    
+  foreach ($settings['Size class fields'] as $field) {
 
     foreach ($variables['facts_peg']['Size classes'] as $key => $size_class) {
       if (isset($size_class[$field])) {
@@ -193,46 +235,46 @@ function template_preprocess_taxon_facts_peg(&$variables) {
 
 /**
  * Save taxon facts.
- * 
+ *
  * @param $taxon_id
  *   The internal taxon id to update facts for.
  * @param $edit
  *   An associative array of fields and values to save.
  *   For example array('Life form' => 'Solitary'). Existing data
  *   will be merged with the $edit array before saving.
- * 
+ *
  */
 function taxon_facts_save($taxon_id, $edit) {
-  
+
   // Load unchanged facts from the database.
   $facts = taxon_db_query('SELECT facts_json FROM taxa_facts WHERE taxon_id = :taxon_id', array(':taxon_id' => $taxon_id))->fetchField();
-  
+
   // Abort if the record does not exists in the database.
   if ($facts === FALSE) {
     return FALSE;
   }
-  
+
   // Decode JSON into an associative array.
   $facts = json_decode($facts, true);
-  
+
   // Merge existing $facts with $edit.
   $edit = array_merge($facts, $edit);
-  
+
   // Set Last modified to a datetime string using the defined timezone.
   $edit['Last modified'] = format_date(time(), 'custom', 'Y-m-d H:i:s');
-  
-  // Write to the database.     
+
+  // Write to the database.
   $result = taxon_db_update('taxa_facts')
     ->fields(array('facts_json' => json_encode($edit)))
     ->condition('taxon_id', $taxon_id)
     ->execute();
-  
+
   if ($result === FALSE) {
     return FALSE;
   }
-  
+
   // Allow other modules to update their data.
   module_invoke_all('taxon_facts_update', $edit, $facts, $taxon_id);
-    
+
   return TRUE;
 }

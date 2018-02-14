@@ -13,12 +13,12 @@
 function taxon_init() {
   global $base_root;
   $url = parse_url($base_root);
-  
+
   $settings = array(
     'api_url' => 'http://api.' . $url['host'],
     'media_url' => 'http://media.' . $url['host'],
   );
-  
+
   drupal_add_js(array('taxon' => $settings), 'setting');
 }
 
@@ -54,12 +54,12 @@ function taxon_page_title($taxon) {
  */
 function taxon_page_view($taxon) {
   drupal_set_title(t('<em>@name</em> @author', array('@name' => $taxon->name, '@author' => $taxon->author)), PASS_THROUGH);
-    
+
   $taxon->content = array();
-  
+
   // Allow modules to make their own additions to taxon.
   module_invoke_all('taxon_view', $taxon);
-  
+
   return $taxon->content;
 }
 
@@ -80,200 +80,184 @@ function taxon_path($name) {
 }
 
 /**
- * Load a taxon object from the WebService API.
- * 
+ * Load a taxon object from the database.
+ *
  * @param $name
  *   The taxon name
- * 
+ *
  * @return
  *   A fully populated taxon object.
  */
 function taxon_load($name) {
-  $taxon = taxon_api_request_load($name);
-  if ($taxon === FALSE) {
-    return FALSE;
-  }
-  return (object) $taxon;
-}
+  $name = str_replace('_', '/', $name);
+  $cache = &drupal_static(__FUNCTION__, array());
 
-/**
- * Issues HTTP request to the WebService API through an 
- * instance of NordicMicroalgaeClient
- * 
- * @param $name
- *   The taxon name to pass to the client
- * @param $method
- *   Method to call on the client
- * 
- * @return
- *   An array with data from the API or false on error
- */
-function taxon_api_request($name, $method) {
-  static $client;
-  
-  if ($client === NULL) {
-    $client = new NordicMicroalgaeClient();
+  if (!isset($cache[$name])) {
+    $cache[$name] = taxon_db_select('taxa', 't')
+      ->fields('t', array('id', 'name', 'author', 'rank', 'parent_id'))
+      ->condition('name', $name)
+      ->execute()
+      ->fetchObject();
   }
-  
-  try {
-    $response = $client->$method($name);
+
+  $taxon = $cache[$name];
+
+  if (!empty($taxon)) {
+    // Allow modules to make their own additions to taxon.
+    module_invoke_all('taxon_load', $taxon);
   }
-  catch (Exception $e) {
-    // Log any exceptions thrown by the client
-    watchdog_exception('taxon', $e, NULL, WATCHDOG_ERROR);
-    return FALSE;
-  }
-  
-  return $response;
-}
 
-function taxon_api_request_load($name) {
-  return taxon_api_request($name, 'load');
-}
-
-function taxon_api_request_settings($key = NULL) {
-  return taxon_api_request($key, 'settings');
-}
-
-function taxon_api_request_taxa($params = array()) {
-  return taxon_api_request($params, 'taxa');
+  return $taxon;
 }
 
 // todo
 function taxon_get_top_nodes() {
-  $result = taxon_api_request_taxa(array('rank' => 'Kingdom'));
-  return $result['taxa'];
+  $taxa = taxon_db_select('taxa', 't')
+    ->fields('t', array('name', 'author', 'rank'))
+    ->condition('rank', 'Kingdom')
+    ->orderBy('name', 'ASC')
+    ->execute()
+    ->fetchAll(PDO::FETCH_ASSOC);
+
+  return $taxa;
 }
 
 /**
  * Returns a setting.
- *  
+ *
  * @param $key
  *   The name of the setting to return.
- * 
+ *
  * @return
  *   The value of the setting, if the setting exists, FALSE otherwise.
  */
 function taxon_get_settings($key = NULL) {
   $settings = &drupal_static(__FUNCTION__);
-  
+
   if (!isset($settings)) {
-    $settings = taxon_api_request_settings();
+    $settings = array();
+    $result = taxon_db_select('system_settings', 's')
+      ->fields('s', array('settings_key', 'settings_value'))
+      ->execute();
+
+    while($row = $result->fetchObject()) {
+      $settings[$row->settings_key] = json_decode($row->settings_value, TRUE);
+    }
   }
-  
+
   return $key ? (isset($settings[$key]) ? $settings[$key] : FALSE) : $settings;
 }
 
 /**
  * Returns internal ID for a taxon name.
- * 
+ *
  * @param $taxon_name
  *   The name of the taxon to return ID for.
- * 
+ *
  * @return
  *   The internal taxon ID, if the taxon exists, FALSE otherwise.
  */
 function taxon_name_to_id($taxon_name) {
   $cache = &drupal_static(__FUNCTION__, array());
-  
-  if (!isset($cache[$taxon_name])) {    
+
+  if (!isset($cache[$taxon_name])) {
     $id = taxon_db_query('SELECT id FROM taxa WHERE name = :name', array(':name' => $taxon_name))->fetchField();
-    $cache[$taxon_name] = $id;    
+    $cache[$taxon_name] = $id;
   }
   return $cache[$taxon_name];
 }
 
 /**
  * Returns taxon name for a internal taxon ID.
- * 
+ *
  * @param $taxon_id
  *   The internal ID of the taxon to return name for.
- * 
+ *
  * @return
  *   The taxon name, if the taxon exists, FALSE otherwise.
  */
 function taxon_id_to_name($taxon_id) {
   $cache = &drupal_static(__FUNCTION__, array());
-  
-  if (!isset($cache[$taxon_id])) {    
+
+  if (!isset($cache[$taxon_id])) {
     $name = taxon_db_query('SELECT name FROM taxa WHERE id = :id', array(':id' => $taxon_id))->fetchField();
-    $cache[$taxon_id] = $name;    
+    $cache[$taxon_id] = $name;
   }
   return $cache[$taxon_id];
 }
 
 /**
  * Wrapper for db_query() using a custom connection.
- * 
+ *
  * @see db_query()
  */
 function taxon_db_query($query, array $args = array(), array $options = array()) {
   db_set_active('nordicmicroalgae');
-  
+
   $result = db_query($query, $args, $options);
-  
+
   db_set_active('default');
-  
+
   return $result;
 }
 
 /**
  * Wrapper for db_select() using a custom connection.
- * 
+ *
  * @see db_select()
  */
 function taxon_db_select($table, $alias = NULL, array $options = array()) {
   db_set_active('nordicmicroalgae');
-  
+
   $result = db_select($table, $alias, $options);
-  
+
   db_set_active('default');
-  
+
   return $result;
 }
 
 /**
  * Wrapper for db_insert() using a custom connection.
- * 
+ *
  * @see db_insert()
  */
 function taxon_db_insert($table, array $options = array()) {
   db_set_active('nordicmicroalgae');
-  
+
   $result = db_insert($table, $options);
-  
+
   db_set_active('default');
-  
+
   return $result;
 }
 
 /**
  * Wrapper for db_update() using a custom connection.
- * 
+ *
  * @see db_update()
  */
 function taxon_db_update($table, array $options = array()) {
   db_set_active('nordicmicroalgae');
-  
+
   $result = db_update($table, $options);
-  
+
   db_set_active('default');
-  
+
   return $result;
 }
 
 /**
  * Wrapper for db_delete() using a custom connection.
- * 
+ *
  * @see db_delete()
  */
 function taxon_db_delete($table, array $options = array()) {
   db_set_active('nordicmicroalgae');
-  
+
   $result = db_delete($table, $options);
-  
+
   db_set_active('default');
-  
+
   return $result;
 }
 
@@ -294,42 +278,42 @@ function taxon_form_generate_fields($field_list, $settings, $values) {
   $form = array();
   $weight = 0;
   $load_wysiwyg_library = FALSE;
-  
+
   foreach ($field_list as $field) {
     if (isset($settings[$field])) {
       $format = $settings[$field];
-      
+
       // Create a Form API compatible key from the field name.
       $form_key = strtolower(preg_replace('/[^a-zA-Z]+/', '_', $field));
-      
+
      // Set up properties that are common for all kind of form controls.
       $form[$form_key]['#title'] = t('@title', array('@title' => $field));
       $form[$form_key]['#description'] = isset($format['Description']) ? filter_xss($format['Description']) : NULL;
       $form[$form_key]['#disabled'] = isset($format['Disabled']) && $format['Disabled'] == 'True';
       $form[$form_key]['#required'] = isset($format['Required']) && $format['Required'] == 'True';
-      
+
       // Initialize array for class names.
       $form[$form_key]['#attributes']['class'] = array();
-      
+
       // TODO: Add configuration.
       $form[$form_key]['#attributes']['class'][] = 'save-state';
-      
+
       // Try to determine a default value for the field.
       $default_value = NULL;
       if (isset($values[$field])) {
         $default_value = $values[$field];
-      } 
+      }
       elseif (isset($format['Default value'])) {
         $default_value = $format['Default value'];
       }
-      
+
       switch ($format['Type']) {
-      
+
         case 'checkbox':
           $form[$form_key]['#type'] = 'checkbox';
           $form[$form_key]['#default_value'] = $default_value;
           break;
-        
+
         case 'checkboxes':
           $form[$form_key]['#type'] = 'checkboxes';
           // NOTE: Values are used as both keys and values since we want labels and return values to be the same.
@@ -337,14 +321,14 @@ function taxon_form_generate_fields($field_list, $settings, $values) {
           // NOTE: #default_value for this type MUST be an array.
           $form[$form_key]['#default_value'] = isset($default_value) ? (array) $default_value : NULL;
           break;
-        
+
         case 'radios':
           $form[$form_key]['#type'] = 'radios';
           // NOTE: Values are used as both keys and values since we want labels and return values to be the same.
           $form[$form_key]['#options'] = array_combine($format['Options'], $format['Options']);
           $form[$form_key]['#default_value'] = $default_value;
           break;
-      
+
         case 'select':
           $form[$form_key]['#type'] = 'select';
           // NOTE: Values are used as both keys and values since we want labels and return values to be the same.
@@ -353,35 +337,35 @@ function taxon_form_generate_fields($field_list, $settings, $values) {
           // NOTE: #default_value for this type COULD be an array if #multiple is set to True.
           $form[$form_key]['#default_value'] = $default_value;
           break;
-          
+
         default:
         case 'textfield':
           $form[$form_key]['#type'] = 'textfield';
           $form[$form_key]['#maxlength'] = isset($format['Max length']) ? $format['Max length'] : NULL;
           $form[$form_key]['#default_value'] = $default_value;
           break;
-        
+
         case 'textarea':
           $form[$form_key]['#type'] = 'textarea';
           $form[$form_key]['#default_value'] = $default_value;
           $form[$form_key]['#resizable'] =  FALSE;
-          
+
           if (isset($format['Visual']) && $format['Visual'] == 'True') {
             $load_wysiwyg_library = TRUE;
             $form[$form_key]['#attributes']['class'][] = 'visual-editor';
           }
           break;
       }
-      
+
       $form[$form_key]['#weight'] = $weight;
       $weight++;
     }
   }
-  
+
   // TODO: Check if the library is available before loading.
   if ($load_wysiwyg_library) {
     drupal_add_js('sites/all/libraries/tinymce/js/tinymce/tinymce.min.js', array('cache' => FALSE));
-    drupal_add_js('tinyMCE.init({ 
+    drupal_add_js('tinyMCE.init({
       mode: "specific_textareas",
       editor_selector: "visual-editor",
       theme: "modern",
@@ -389,7 +373,7 @@ function taxon_form_generate_fields($field_list, $settings, $values) {
       toolbar: "bold italic underline strikethrough | subscript superscript"
     })', 'inline');
   }
-  
+
   return $form;
 }
 
@@ -407,15 +391,15 @@ function taxon_form_generate_fields($field_list, $settings, $values) {
  */
 function taxon_form_get_data($field_list, $form, &$form_state) {
   $data = array();
-  
+
   foreach ($field_list as $field) {
     // Re-create a Form API compatible key from the field name.
     $form_key = strtolower(preg_replace('/[^a-zA-Z]+/', '_', $field));
-   
+
     if (isset($form_state['values'][$form_key])) {
       $field_value = $form_state['values'][$form_key];
       $field_type = $form[$form_key]['#type'];
-      
+
       // Handle both single- and multiple/list values.
       if (is_array($field_value)) {
         $data[$field] = array();
@@ -431,9 +415,9 @@ function taxon_form_get_data($field_list, $form, &$form_state) {
         $data[$field] = $field_value;
       }
     }
-    
+
   }
-  
+
   return $data;
 }
 

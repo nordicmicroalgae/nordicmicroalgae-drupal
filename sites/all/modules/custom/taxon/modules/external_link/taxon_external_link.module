@@ -19,6 +19,19 @@ function taxon_external_link_theme() {
 }
 
 /**
+ * Implements hook_taxon_load().
+ */
+function taxon_external_link_taxon_load($taxon) {
+  if (!isset($taxon->external_links)) {
+    $taxon->external_links = taxon_db_select('taxa_external_links', 'el')
+      ->fields('el', array('provider', 'type', 'value'))
+      ->condition('taxon_id', $taxon->id)
+      ->execute()
+      ->fetchAll(PDO::FETCH_ASSOC);
+  }
+}
+
+/**
  * Implements hook_taxon_view().
  */
 function taxon_external_link_taxon_view($taxon) {
@@ -33,10 +46,10 @@ function taxon_external_link_taxon_view($taxon) {
 
 /**
  * Process variables for taxon external links.
- * 
+ *
  * The $variables array contains the following arguments:
  * - $external_links
- * 
+ *
  * @see taxon-external-links.tpl.php
  */
 function template_preprocess_taxon_external_links(&$variables) {
@@ -44,7 +57,7 @@ function template_preprocess_taxon_external_links(&$variables) {
   foreach ($variables['external_links'] as $key => $external_link) {
     $variables['external_links'][$key]['link'] = url($external_link['value']);
     $variables['external_links'][$key]['provider'] = check_plain($external_link['provider']);
-    
+
     $provider_class = str_replace(' ', '-', $variables['external_links'][$key]['provider']);
     $provider_class = 'taxon-external-link-' . strtolower($provider_class);
     $variables['external_links'][$key]['provider_class'] = $provider_class;
